@@ -1,0 +1,20 @@
+{
+  "name": "@tofarfar/package-manifest",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "description": "仅 HTTP Range 探测 APK 的 AndroidManifest.xml，无需下载整个文件即可拿到 versionName / versionCode / package",
+  "scripts": {
+    "build": "rm -rf dist && mkdir dist && tsc",
+    "test": "npm run build && node --test",
+    "release": "npm run test && npm publish --\"@tofarfar:registry=https://npm.pkg.github.com/\""
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "typescript": "^6.0.2"
+  },
+  "files": [
+    "dist"
+  ]
+}

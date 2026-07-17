@@ -1,0 +1,36 @@
+/* 参考：https://www.totaltypescript.com/tsconfig-cheat-sheet */
+{
+  "include": ["src/"], //仅检测 src 目录的文件，如果不设置，默认是 tsconfig.json 所在的目录
+  "exclude": [],
+  "compilerOptions": {
+    /* Base Options: */
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "target": "es2022",
+    "allowJs": true,
+    "resolveJsonModule": true, //Allows importing modules with a .json extension
+    "moduleDetection": "force", //Ensures that every non-declaration file is treated as a module.
+    "isolatedModules": true,
+
+    "module": "nodenext",
+    "declaration": true,
+    "rootDir": "./src",
+    "outDir": "./dist",
+
+    /* es2022：允许用较新的语法；DOM：使用无头浏览器时可能会用到 DOM */
+    "lib": ["es2022"],
+
+    "types": ["node"],
+
+    /* Strictness */
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+
+    /* 以下选项用来确保 node.js 可以直接运行 .ts 文件：https://nodejs.org/docs/latest/api/typescript.html#type-stripping */
+    "erasableSyntaxOnly": true,
+    "allowImportingTsExtensions": true, //允许 import 文件的时候使用 .ts 后缀，而不是 .js 后缀
+    "rewriteRelativeImportExtensions": true, //生成 js 文件的时候，会自动把引入文件的 .ts 后缀替换为 .js 后缀
+    "verbatimModuleSyntax": true //import type 的时候需要加上 `type`
+  }
+}
