@@ -92,16 +92,20 @@ function agentFor(url: URL): https.Agent | http.Agent {
   return url.protocol === "https:" ? httpsAgent : httpAgent;
 }
 
-/** 发一个 HTTP 请求，返回 {status, headers, body}。 */
-function httpRequest(
+/** 发一个 HTTP 请求，自动跟随 3xx 重定向（最多 5 跳），返回 {status, headers, body}。 */
+async function httpRequest(
+  ctx: ProbeContext,
   url: URL,
   method: "GET" | "HEAD",
   extraHeaders: Record<string, string> = {},
+  redirects = 0,
 ): Promise<{
   status: number;
   headers: http.IncomingHttpHeaders;
   body: Buffer;
 }> {
+  if (redirects > 5) throw new Error("too many redirects");
+
   return new Promise((resolve, reject) => {
     const req = (url.protocol === "https:" ? https : http).request(
       {
@@ -113,6 +117,26 @@ function httpRequest(
         agent: agentFor(url),
       },
       (res) => {
+        // 跟随 3xx 重定向（301/302/303/307/308）。重定向到新 host 时把 ctx.url 更新。
+        if (
+          res.statusCode &&
+          res.statusCode >= 300 &&
+          res.statusCode < 400 &&
+          res.headers.location
+        ) {
+          const nextUrl = new URL(res.headers.location, url.toString());
+          ctx.url = nextUrl; // 后续请求直接打到重定向后的 host
+          const nextMethod =
+            res.statusCode === 303 || method === "HEAD"
+              ? "GET"
+              : method;
+          drainBody(res).then(() =>
+            resolve(
+              httpRequest(ctx, nextUrl, nextMethod as "GET" | "HEAD", extraHeaders, redirects + 1),
+            ),
+          );
+          return;
+        }
         drainBody(res).then((body) =>
           resolve({
             status: res.statusCode ?? 0,
@@ -141,7 +165,7 @@ async function fetchRange(
   start: number,
   end: number,
 ): Promise<Buffer> {
-  const { status, body } = await httpRequest(ctx.url, "GET", {
+  const { status, body } = await httpRequest(ctx, ctx.url, "GET", {
     Range: `bytes=${start}-${end - 1}`,
   });
   if (status !== 206) {
@@ -152,7 +176,7 @@ async function fetchRange(
 }
 
 async function fetchTotalSize(ctx: ProbeContext): Promise<number> {
-  const { status, headers } = await httpRequest(ctx.url, "HEAD");
+  const { status, headers } = await httpRequest(ctx, ctx.url, "HEAD");
   if (status >= 400) throw new Error(`HEAD failed (status=${status})`);
   const len = Number(headers["content-length"]);
   if (!len) throw new Error("content-length missing");
@@ -279,7 +303,9 @@ async function findManifestInCd(ctx: ProbeContext, cdOff: number): Promise<CdEnt
     }
   };
 
-  while (p + CD_FIXED_SIZE <= buf.length) {
+  // 扫描循环：先 ensure 到少 46B（拉下一块若不够），再判定签名，再读到 entry 名。
+  // 注意 ensure 必须在循环体开头而不是条件判断后，否则当 entry 跨 chunk 边界时会读到错误签名就 break。
+  while (true) {
     await ensure(CD_FIXED_SIZE);
     if (buf.readUInt32LE(p) !== CD_SIGNATURE) break;
 
